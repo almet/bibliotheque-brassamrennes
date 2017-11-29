@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Bibliothèque des brassams de Rennes</title>
+    </head>
+    <body>
+
+    </body>
+    <script type="text/javascript">
+
+    /**
+     * Cleans a record: given a row text, transform it into a "normal" text.
+     **/
+    function cleanText(text) {
+        return text;
+    }
+
+    function parseOwner(text) {
+        return text.split(' :')[0];
+    }
+
+    function createRecord(line, owner, category) {
+        //var bookRegexp = /\\t-\s\\"(.*)\\"\s\((.*)\)/;
+        var bookRegexp = /\t-\s\"(.*)\"\s\((.*)\)/;
+
+        var result = bookRegexp.exec(line);
+        if (result == null) {
+            console.log("Doesn't match", line);
+        } else {
+            var [_, title, info] = result;
+            var authors = info.split(',');
+            var year = authors.pop();
+            var title = title.split(":")[0];
+            var book = {
+                title: title,
+                authors: authors,
+                year: year,
+                owner: owner,
+                category: category,
+            };
+            enhanceBookInfo(book);
+            return book;
+        }
+    }
+    /**
+     * Parses a text and generate an array out of it, containing a list of book
+     * objects.
+     **/
+    function createLibrary(text) {
+        let records = new Array();
+        let library = text.split('----')[1];
+        let owners = library.split('\n\n');
+        for (ownerList of owners) {
+            var lines = ownerList.split('\n');
+            // If we have less than two lines, it's not worth looking at.
+            if (lines.length < 2) {
+                continue;
+            }
+            var owner = parseOwner(lines[0]);
+            for (line of lines) {
+                var category = "book";
+
+                // It's a book.
+                if (line.startsWith('\t-')) {
+                    var book = createRecord(line, owner, category);
+                    if (book !== undefined) records.push(book);
+                }
+                // It's a category.
+                else if (line.startsWith('\t')) {
+                    category = cleanText(line);
+                }
+            }
+        }
+        return records;
+    }
+
+    function enhanceBookInfo(book) {
+        var apiKey = 'AIzaSyC4d__cyVsguGik82k9onnaI6gDmTjrFfo';
+        var title = encodeURIComponent(book.title);
+        var author = encodeURIComponent(book.authors[0]);
+        fetch(`https://www.googleapis.com/books/v1/volumes?q=intitle:"${title}"+inauthor:${author}&key=${apiKey}&country=FR`).then((resp) => {
+            if (resp.ok) {
+                resp.json().then((json) => {
+                    if (json.totalItems > 0) {
+                        var item = json.items[0];
+                        book.description = item.volumeInfo.description;
+                        if (item.volumeInfo.imageLinks !== undefined) {
+                            book.thumbnail = item.volumeInfo.imageLinks.thumbnail;
+                        }
+                        if (item.volumeInfo.pageCount !== undefined) {
+                            book.pageCount = item.volumeInfo.pageCount;
+                        }
+                        if (item.volumeInfo.subtitle !== undefined) {
+                            book.subtitle = item.volumeInfo.subtitle;
+                        }
+                    }
+                })
+            }
+        });
+        // http://images.amazon.com/images/P/{{book.isbn}}.01.ZTZZZZZZ.jpg
+    }
+
+    fetch('https://pad.notmyidea.org/p/brassam-bibliotheque/export/txt').then((resp) => {
+        if (resp.ok == true) {
+            resp.text().then((text) => {
+                var library = createLibrary(text);
+                console.log(library);
+            });
+        }
+    });
+    </script>
+</html>
