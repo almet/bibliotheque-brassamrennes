@@ -3,12 +3,63 @@
     <head>
         <meta charset="utf-8">
         <title>Bibliothèque des brassams de Rennes</title>
+        <link rel="stylesheet" href="assets/bootstrap.min.css">
+        <link rel="stylesheet" href="assets/bootstrap-theme.min.css">
+        <link rel="stylesheet" href="assets/nova.css">
     </head>
     <body>
+        <div class="container">
+          <h1><a href="#">Bibliothèque des brasseurs amateurs de Rennes</a></h1>
 
+        <section class="section-cqct section-speciale">
+        <div id="books" class="row">
+          <template id="book-tpl">
+            <div onClick=""
+                class="square-item col-xs-6 col-sm-4 col-md-3 fadeIn">
+                <a>
+                    <picture class="picture">
+                        <!--[if IE 9]><video style="display: none;"><![endif]-->
+                        <source srcset="" media="(min-width: 1200px)">
+                        <source srcset="" media="(min-width: 992px)">
+                        <source srcset="" media="(min-width: 768px)">
+                        <source srcset="" media="(max-width: 767px)">
+                        <!--[if IE 9]></video><![endif]-->
+                        <img class="img" src="" srcset="" alt="">
+                    </picture>
+                    <time class="time"></time>
+                    <div class="title">
+                        <div class="description"></div>
+                        <div class="author"></div>
+                    </div>
+                </a>
+            </div>
+        </template>
+        </div>
+        </section>
+        </div>
     </body>
     <script type="text/javascript">
 
+    function renderBooks(books) {
+        var container = document.getElementById("books");
+        books.forEach((book) => {
+            container.appendChild(renderBook(book));
+        });
+    }
+    function renderBook(book) {
+        var tpl = document.getElementById("book-tpl");
+        var div = tpl.content.cloneNode(true);
+        var sources = div.querySelectorAll(".picture>source");
+        for (source of sources) {
+            source.srcset = book.thumbnail;
+        }
+        div.querySelector(".img").srcset = book.thumbnail;
+        div.querySelector(".img").src = book.thumbnail;
+        if (book.pageCount !== undefined) div.querySelector(".time").textContent = book.pageCount + " pages";
+        div.querySelector(".description").textContent = book.title;
+        div.querySelector(".author").textContent = book.authors;
+        return div;
+    }
     /**
      * Cleans a record: given a row text, transform it into a "normal" text.
      **/
@@ -39,7 +90,6 @@
                 owner: owner,
                 category: category,
             };
-            enhanceBookInfo(book);
             return book;
         }
     }
@@ -79,14 +129,15 @@
         var apiKey = 'AIzaSyC4d__cyVsguGik82k9onnaI6gDmTjrFfo';
         var title = encodeURIComponent(book.title);
         var author = encodeURIComponent(book.authors[0]);
-        fetch(`https://www.googleapis.com/books/v1/volumes?q=intitle:"${title}"+inauthor:${author}&key=${apiKey}&country=FR`).then((resp) => {
+        return fetch(`https://www.googleapis.com/books/v1/volumes?q=intitle:"${title}"+inauthor:${author}&key=${apiKey}&country=FR`).then((resp) => {
             if (resp.ok) {
-                resp.json().then((json) => {
+                return resp.json().then((json) => {
                     if (json.totalItems > 0) {
                         var item = json.items[0];
                         book.description = item.volumeInfo.description;
                         if (item.volumeInfo.imageLinks !== undefined) {
                             book.thumbnail = item.volumeInfo.imageLinks.thumbnail;
+                            console.log("yeah", book.thumbnail);
                         }
                         if (item.volumeInfo.pageCount !== undefined) {
                             book.pageCount = item.volumeInfo.pageCount;
@@ -95,8 +146,9 @@
                             book.subtitle = item.volumeInfo.subtitle;
                         }
                     }
-                })
-            }
+                    return book;
+                });
+            };
         });
         // http://images.amazon.com/images/P/{{book.isbn}}.01.ZTZZZZZZ.jpg
     }
@@ -105,7 +157,12 @@
         if (resp.ok == true) {
             resp.text().then((text) => {
                 var library = createLibrary(text);
-                console.log(library);
+                var promises = library.map((book) => {
+                    return enhanceBookInfo(book);
+                })
+                Promise.all(promises).then((books) => {
+                    renderBooks(books);
+                })
             });
         }
     });
